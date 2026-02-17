@@ -3,8 +3,8 @@
 
 import Purchases from 'react-native-purchases';
 
-// RevenueCat API key
-const REVENUECAT_API_KEY = 'sk_wLhbKPVGUpSbLVNGkfrYVtPXzgCcq';
+// RevenueCat SDK public API key
+const REVENUECAT_API_KEY = 'test_mHzvaHRZtbizYAzPCBmnKZEtumq';
 
 // Package names for the app
 const ANDROID_PACKAGE = 'com.momentum.habits';
