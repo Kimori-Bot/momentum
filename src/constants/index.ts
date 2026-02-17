@@ -37,6 +37,7 @@ export const STORAGE_KEYS = {
   user: 'user',
   habits: 'habits',
   settings: 'settings',
+  onboardingComplete: 'onboarding_complete',
 };
 
 // Supabase configuration

@@ -2,11 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, Platform, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from './types';
-import { COLORS } from './constants';
+import { COLORS, STORAGE_KEYS } from './constants';
 import { StorageService } from './services/storage';
 import { RevenueCatService } from './services/revenueCat';
 import { HomeScreen } from './screens/HomeScreen';
+import { Onboarding } from './components/Onboarding';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -15,12 +17,26 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    initializeApp();
+    checkOnboarding();
   }, []);
+
+  const checkOnboarding = async () => {
+    const completed = await AsyncStorage.getItem(STORAGE_KEYS.onboardingComplete);
+    if (!completed) {
+      setShowOnboarding(true);
+    }
+    initializeApp();
+  };
+
+  const handleOnboardingComplete = async () => {
+    await AsyncStorage.setItem(STORAGE_KEYS.onboardingComplete, 'true');
+    setShowOnboarding(false);
+  };
 
   const initializeApp = async () => {
     // Initialize RevenueCat
@@ -118,11 +134,9 @@ export default function App() {
         { 
           text: '$4.99/month', 
           onPress: async () => {
-            // In production, this would call RevenueCatService.purchaseProduct()
-            // For demo, we simulate a purchase
             Alert.alert(
               'Demo Mode',
-              'In production, this would open Apple/Google Play payment. For now, simulating purchase...',
+              'In production, this would open Apple/Google payment.',
               [
                 { 
                   text: 'Simulate Purchase', 
@@ -145,7 +159,7 @@ export default function App() {
           onPress: async () => {
             Alert.alert(
               'Demo Mode',
-              'In production, this would open Apple/Google Play payment.',
+              'In production, this would open Apple/Google payment.',
               [
                 { 
                   text: 'Simulate Purchase', 
@@ -191,6 +205,16 @@ export default function App() {
       ]
     );
   };
+
+  // Show onboarding for first-time users
+  if (showOnboarding) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <Onboarding onComplete={handleOnboardingComplete} />
+      </>
+    );
+  }
 
   // Auth Screen
   if (!user) {
