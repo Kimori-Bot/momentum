@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, ScrollView, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, TextInput, ScrollView, Alert, Platform, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+
+// Replace with your Supabase project URL and key
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+// Initialize Supabase (will only work when configured)
+const supabase = SUPABASE_URL !== 'YOUR_SUPABASE_URL' ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 interface Habit {
   id: string;
@@ -9,6 +17,13 @@ interface Habit {
   color: string;
   completedDates: string[];
   createdAt: string;
+  userId: string;
+}
+
+interface User {
+  id: string;
+  email: string;
+  isPremium: boolean;
 }
 
 const COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899'];
@@ -18,29 +33,99 @@ export default function App() {
   const [newHabitName, setNewHabitName] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    loadUser();
+    checkUser();
   }, []);
 
-  const loadUser = async () => {
+  const checkUser = async () => {
     try {
-      let id = await AsyncStorage.getItem('userId');
-      if (!id) {
-        id = 'user_' + Date.now();
-        await AsyncStorage.setItem('userId', id);
+      const savedUser = await AsyncStorage.getItem('user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
       }
-      setUserId(id);
       const savedHabits = await AsyncStorage.getItem('habits');
       if (savedHabits) {
         setHabits(JSON.parse(savedHabits));
       }
     } catch (e) {
-      console.error('Error loading user:', e);
+      console.error('Error:', e);
     }
+  };
+
+  const signUp = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
+      return;
+    }
+    setIsLoading(true);
+    
+    // For demo: create local user (replace with Supabase in production)
+    const newUser: User = {
+      id: 'user_' + Date.now(),
+      email,
+      isPremium: false, // New users start free
+    };
+    
+    await AsyncStorage.setItem('user', JSON.stringify(newUser));
+    setUser(newUser);
+    setIsLoading(false);
+    Alert.alert('Success', 'Account created! You start with a free tier.');
+  };
+
+  const signIn = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
+      return;
+    }
+    setIsLoading(true);
+    
+    // Demo: simulate login
+    const existingUser: User = {
+      id: 'user_' + Date.now(),
+      email,
+      isPremium: false,
+    };
+    
+    await AsyncStorage.setItem('user', JSON.stringify(existingUser));
+    setUser(existingUser);
+    setIsLoading(false);
+  };
+
+  const signOut = async () => {
+    await AsyncStorage.removeItem('user');
+    setUser(null);
+    setHabits([]);
+    setEmail('');
+    setPassword('');
+  };
+
+  const subscribeToPremium = () => {
+    Alert.alert(
+      'Upgrade to Premium',
+      'Premium features:\n• Unlimited habits\n• Cloud sync across devices\n• Advanced analytics\n• No ads\n\n$4.99/month or $39.99/year',
+      [
+        { text: 'Not Now', style: 'cancel' },
+        { 
+          text: 'Subscribe', 
+          onPress: async () => {
+            if (user) {
+              const premiumUser = { ...user, isPremium: true };
+              await AsyncStorage.setItem('user', JSON.stringify(premiumUser));
+              setUser(premiumUser);
+              Alert.alert('Welcome to Premium! 🎉', 'You now have unlimited access.');
+            }
+          }
+        },
+      ]
+    );
   };
 
   const saveHabits = async (newHabits: Habit[]) => {
@@ -53,12 +138,27 @@ export default function App() {
       Alert.alert('Error', 'Please enter a habit name');
       return;
     }
+    
+    // Check premium limit
+    if (!user?.isPremium && habits.length >= 3) {
+      Alert.alert(
+        'Free Limit Reached',
+        'Free tier is limited to 3 habits. Upgrade to Premium for unlimited habits!',
+        [
+          { text: 'OK' },
+          { text: 'Upgrade', onPress: subscribeToPremium }
+        ]
+      );
+      return;
+    }
+    
     const newHabit: Habit = {
       id: 'habit_' + Date.now(),
       name: newHabitName.trim(),
       color: selectedColor,
       completedDates: [],
       createdAt: today,
+      userId: user?.id || 'anonymous',
     };
     saveHabits([...habits, newHabit]);
     setNewHabitName('');
@@ -84,7 +184,7 @@ export default function App() {
   const deleteHabit = (habitId: string) => {
     Alert.alert(
       'Delete Habit',
-      'Are you sure you want to delete this habit?',
+      'Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => {
@@ -102,9 +202,6 @@ export default function App() {
       if (habit.completedDates.includes(dateStr)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
-      } else if (dateStr === today && habit.completedDates.includes(today)) {
-        // Today counts as streak if completed
-        checkDate.setDate(checkDate.getDate() - 1);
       } else {
         break;
       }
@@ -116,15 +213,81 @@ export default function App() {
   const totalHabits = habits.length;
   const overallStreak = habits.length > 0 ? Math.min(...habits.map(h => getStreak(h))) : 0;
 
+  // Auth Screen
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.authContainer}>
+          <Text style={styles.authTitle}>Momentum</Text>
+          <Text style={styles.authSubtitle}>Build better habits</Text>
+          
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#9CA3AF"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#9CA3AF"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          
+          <TouchableOpacity 
+            style={styles.primaryButton} 
+            onPress={isSignUp ? signUp : signIn}
+            disabled={isLoading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isLoading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
+            <Text style={styles.switchText}>
+              {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Momentum</Text>
-        <Text style={styles.headerSubtitle}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Momentum</Text>
+          <TouchableOpacity onPress={signOut}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.headerSubtitle}>
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        </Text>
+        {user.isPremium && (
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeText}>⭐ PREMIUM</Text>
+          </View>
+        )}
       </View>
+
+      {/* Premium Banner */}
+      {!user.isPremium && habits.length >= 2 && (
+        <TouchableOpacity style={styles.premiumBanner} onPress={subscribeToPremium}>
+          <Text style={styles.premiumBannerText}>🔒 Upgrade to Premium for unlimited habits</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Stats */}
       <View style={styles.statsContainer}>
@@ -137,7 +300,7 @@ export default function App() {
           <Text style={styles.statLabel}>Streak</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statNumber}>{habits.length}</Text>
+          <Text style={styles.statNumber}>{habits.length}{!user.isPremium ? '/3' : ''}</Text>
           <Text style={styles.statLabel}>Habits</Text>
         </View>
       </View>
@@ -225,21 +388,99 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#111827',
   },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  authTitle: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  authSubtitle: {
+    fontSize: 18,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  input: {
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  primaryButton: {
+    backgroundColor: '#4F46E5',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  switchText: {
+    color: '#9CA3AF',
+    textAlign: 'center',
+    fontSize: 14,
+  },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
     paddingBottom: 20,
     backgroundColor: '#1F2937',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  signOutText: {
+    color: '#EF4444',
+    fontSize: 14,
+  },
   headerSubtitle: {
     fontSize: 16,
     color: '#9CA3AF',
     marginTop: 4,
+  },
+  premiumBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  premiumBadgeText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  premiumBanner: {
+    backgroundColor: '#F59E0B',
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+  },
+  premiumBannerText: {
+    color: '#000',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -369,14 +610,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 20,
     textAlign: 'center',
-  },
-  input: {
-    backgroundColor: '#374151',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 20,
   },
   colorLabel: {
     fontSize: 14,
