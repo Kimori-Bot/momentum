@@ -38,3 +38,9 @@ export const STORAGE_KEYS = {
   habits: 'habits',
   settings: 'settings',
 };
+
+// Supabase configuration
+export const SUPABASE_CONFIG = {
+  url: 'https://ukhtixxdqoqiryxqhvng.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVraHRpeHhkcW9xaXJ5eHFodm5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNTY0OTQsImV4cCI6MjA4NjkzMjQ5NH0.hNFgvtfBCYFmdd6agDQ960iat6ynyWrNdcjFvUhmxhc',
+};

@@ -1,5 +1,5 @@
 // HomeScreen with tab navigation
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { User, Habit } from '../types';
@@ -10,6 +10,7 @@ import { HabitCard } from '../components/HabitCard';
 import { StatsBox } from '../components/StatsBox';
 import { AddHabitModal } from '../components/AddHabitModal';
 import { SettingsScreen } from './SettingsScreen';
+import { AnalyticsScreen } from './AnalyticsScreen';
 
 interface HomeScreenProps {
   user: User;
@@ -17,7 +18,7 @@ interface HomeScreenProps {
   onSignOut: () => void;
 }
 
-type Tab = 'home' | 'stats' | 'settings';
+type Tab = 'home' | 'analytics' | 'settings';
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ user, onSubscribe, onSignOut }) => {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -159,64 +160,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ user, onSubscribe, onSig
     </>
   );
 
-  // Render stats tab
-  const renderStats = () => {
-    const completionRate = habits.length > 0 
-      ? Math.round(habits.reduce((acc, h) => acc + HabitService.getCompletionRate(h), 0) / habits.length)
-      : 0;
-    
-    const longestStreak = habits.length > 0 
-      ? Math.max(...habits.map(h => HabitService.getStreak(h).longestStreak))
-      : 0;
-
-    return (
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Statistics</Text>
-        </View>
-        
-        <View style={styles.statsContainer}>
-          <StatsBox value={completionRate + '%'} label="Completion Rate" />
-          <StatsBox value={longestStreak} label="Best Streak" />
-        </View>
-
-        <View style={styles.statsList}>
-          {habits.map(habit => {
-            const info = HabitService.getStreak(habit);
-            const rate = HabitService.getCompletionRate(habit);
-            return (
-              <View key={habit.id} style={styles.habitStatCard}>
-                <View style={[styles.habitDot, { backgroundColor: habit.color }]} />
-                <View style={styles.habitStatInfo}>
-                  <Text style={styles.habitStatName}>{habit.name}</Text>
-                  <Text style={styles.habitStatMeta}>
-                    🔥 {info.currentStreak} day streak • {rate}% completion
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
-    );
-  };
-
-  // Render settings tab
-  const renderSettings = () => (
-    <SettingsScreen 
-      user={user} 
-      onSubscribe={onSubscribe}
-      onSignOut={onSignOut}
-    />
-  );
-
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
       
       {activeTab === 'home' && renderHome()}
-      {activeTab === 'stats' && renderStats()}
-      {activeTab === 'settings' && renderSettings()}
+      {activeTab === 'analytics' && <AnalyticsScreen habits={habits} isPremium={user.isPremium} />}
+      {activeTab === 'settings' && <SettingsScreen user={user} onSubscribe={onSubscribe} onSignOut={onSignOut} />}
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>
@@ -229,10 +179,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ user, onSubscribe, onSig
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.tab} 
-          onPress={() => setActiveTab('stats')}
+          onPress={() => setActiveTab('analytics')}
         >
-          <Text style={[styles.tabIcon, activeTab === 'stats' && styles.tabActive]}>📊</Text>
-          <Text style={[styles.tabLabel, activeTab === 'stats' && styles.tabLabelActive]}>Stats</Text>
+          <Text style={[styles.tabIcon, activeTab === 'analytics' && styles.tabActive]}>📊</Text>
+          <Text style={[styles.tabLabel, activeTab === 'analytics' && styles.tabLabelActive]}>Analytics</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.tab} 
@@ -340,36 +290,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: COLORS.text,
     fontWeight: '300',
-  },
-  statsList: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  habitStatCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  habitDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  habitStatInfo: {
-    flex: 1,
-  },
-  habitStatName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  habitStatMeta: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 2,
   },
   tabBar: {
     flexDirection: 'row',
